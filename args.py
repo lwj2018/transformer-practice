@@ -1,6 +1,8 @@
+from datetime import datetime
 class Arguments:
     def __init__(self):
         # Path setting
+        self.log_path = "log/transformer_{:%Y-%m-%d_%H-%M-%S}.log".format(datetime.now())
         self.model_path = "./checkpoint"
         self.resume_model = None
 
@@ -12,6 +14,10 @@ class Arguments:
         self.dim_feedforword = 2048
         self.dropout = 0.5
         self.activation = 'relu'
+        self.epochs = 100
+        self.learning_rate = 1e-5
+        self.batch_size = 8
+
 
         # options
         self.dataset = 'multi30k'

@@ -10,14 +10,17 @@ from utils.trainUtils import train
 from utils.testUtils import test
 from args import Arguments
 from utils.ioUtils import save_checkpoint, resume_model
-from utils.critUtils import LabelSmoothing
 from models import TransformerModel
+
+import torch
+from torchtext.datasets import Multi30k
+from torchtext.data import BucketIterator, Field
 
 # get arguments
 args = Arguments()
 
 # Log to file
-logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[logging.FileHandler(args.log_path)])
+logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[logging.FileHandler(args.log_path),logging.StreamHandler()])
 logger = logging.getLogger('nlp')
 logger.info('Logging to file...')
 
@@ -29,7 +32,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # dont use writer temporarily
 writer = None
 
-best_wer = 999.00
+best_bleu = 999.00
 start_epoch = 0
 
 # Train with Transformer
@@ -48,7 +51,7 @@ if __name__ == '__main__':
                 lower = True)
 
     train_data, val_data, test_data = Multi30k.splits(exts = ('.de', '.en'), fields = (SRC, TRG))
-    train_iter, val_iter, test_iter = BucketIterator.splits((train_data, val_data, test_data), batch_size = 2)
+    train_iter, val_iter, test_iter = BucketIterator.splits((train_data, val_data, test_data), batch_size = args.batch_size)
 
     print(len(train_iter))
 
@@ -67,24 +70,24 @@ if __name__ == '__main__':
         logger.info("Using {} GPUs".format(torch.cuda.device_count()))
         model = nn.DataParallel(model)
     # Create loss criterion & optimizer
-    criterion = nn.CrossEntropyLoss(ignore_index = SRC.vocab.stoi['<pad>'])
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 
     # Start training
     logger.info("Training Started".center(60, '#'))
     for epoch in range(start_epoch, args.epochs):
         # Train the model
-        train(model, criterion, optimizer, trainloader, device, epoch, logger, args.log_interval, writer)
+        train(model, criterion, optimizer, train_iter, device, epoch, logger, args.log_interval, writer, TRG)
         # Test the model
-        wer = test(model, criterion, testloader, device, epoch, logger, args.log_interval, writer)
+        bleu = test(model, criterion, val_iter, device, epoch, logger, args.log_interval, writer, TRG)
         # Save model
         # remember best wer and save checkpoint
-        is_best = wer<best_wer
-        best_wer = min(wer, best_wer)
+        is_best = bleu<best_bleu
+        best_bleu = min(bleu, best_bleu)
         save_checkpoint({
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
-            'best_wer': best_wer
+            'best_bleu': best_bleu
         }, is_best, args.model_path, args.store_name)
         logger.info("Epoch {} Model Saved".format(epoch+1).center(60, '#'))
 
